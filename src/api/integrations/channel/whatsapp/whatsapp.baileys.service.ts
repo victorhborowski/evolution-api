@@ -3356,7 +3356,7 @@ export class BaileysStartupService extends ChannelStartupService {
       });
     }
 
-    // ── Reply buttons (estratégia whaileys confirmada) ──────
+    // ── Reply buttons usando interactiveMessage (fix oficial) ──────
     if (hasReplyButtons) {
       const generate = await (async () => {
         if (data?.thumbnailUrl) {
@@ -3364,55 +3364,43 @@ export class BaileysStartupService extends ChannelStartupService {
         }
       })();
 
-      // ESTRATÉGIA 1: buttonsMessage (estrutura whaileys - confirmada funcionando)
-      const buttons = data.buttons.map((btn, index) => ({
-        buttonId: btn.id || `btn_${index}`,
-        buttonText: { displayText: btn.displayText },
-        type: 1,
+      // Botões no formato correto para nativeFlowMessage
+      const nativeButtons = data.buttons.map((btn) => ({
+        name: 'quick_reply',
+        buttonParamsJson: JSON.stringify({
+          display_text: btn.displayText,
+          id: btn.id || `btn_${Math.random().toString(36).substr(2, 9)}`
+        })
       }));
 
-      const baseMsg: any = {
-        text: '*' + data.title + '*' + (data?.description ? '\n\n' + data.description : ''),
-        footer: data?.footer || '',
-        buttons,
-        headerType: 1,
+      const message: any = {
+        interactiveMessage: {
+          body: {
+            text: '*' + data.title + '*' + (data?.description ? '\n\n' + data.description : '')
+          },
+          footer: { text: data?.footer || '' },
+          header: (() => {
+            if (generate?.message?.imageMessage) {
+              return {
+                hasMediaAttachment: true,
+                imageMessage: generate.message.imageMessage
+              };
+            }
+          })(),
+          nativeFlowMessage: {
+            buttons: nativeButtons,
+            messageParamsJson: JSON.stringify({ from: 'api', templateId: v4() })
+          }
+        }
       };
 
-      // Com imagem
-      if (generate?.message?.imageMessage) {
-        const imgMsg: any = {
-          image: generate.message.imageMessage,
-          caption: '*' + data.title + '*' + (data?.description ? '\n\n' + data.description : ''),
-          footer: data?.footer || '',
-          buttons,
-          headerType: 4,
-        };
-
-        try {
-          return await this.sendMessageWithTyping(data.number, imgMsg, {
-            delay: data?.delay,
-            presence: 'composing',
-            quoted: data?.quoted,
-            mentionsEveryOne: data?.mentionsEveryOne,
-            mentioned: data?.mentioned,
-          });
-        } catch (err) {
-          this.logger.warn('buttonMessage imgMsg failed, falling back to nativeFlow');
-        }
-      }
-
-      // Tentar buttonsMessage simples
-      try {
-        return await this.sendMessageWithTyping(data.number, baseMsg, {
-          delay: data?.delay,
-          presence: 'composing',
-          quoted: data?.quoted,
-          mentionsEveryOne: data?.mentionsEveryOne,
-          mentioned: data?.mentioned,
-        });
-      } catch (err) {
-        this.logger.error('buttonMessage simple ERRO: ' + JSON.stringify(err));
-      }
+      return await this.sendMessageWithTyping(data.number, message, {
+        delay: data?.delay,
+        presence: 'composing',
+        quoted: data?.quoted,
+        mentionsEveryOne: data?.mentionsEveryOne,
+        mentioned: data?.mentioned,
+      });
     }
 
     // ── Fallback: nativeFlowMessage (URL, call, copy e outros) ─
