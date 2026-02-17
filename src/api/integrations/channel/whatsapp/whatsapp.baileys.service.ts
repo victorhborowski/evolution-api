@@ -151,7 +151,6 @@ import qrcodeTerminal from 'qrcode-terminal';
 import sharp from 'sharp';
 import { PassThrough, Readable } from 'stream';
 import { v4 } from 'uuid';
-import { patchedMethods } from './buttons-patch';
 
 import { BaileysMessageProcessor } from './baileysMessage.processor';
 import { useVoiceCallsBaileys } from './voiceCalls/useVoiceCallsBaileys';
