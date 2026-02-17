@@ -3317,9 +3317,7 @@ export class BaileysStartupService extends ChannelStartupService {
     }
 
     const hasReplyButtons = data.buttons.some((btn) => btn.type === 'reply');
-
     const hasPixButton = data.buttons.some((btn) => btn.type === 'pix');
-
     const hasOtherButtons = data.buttons.some((btn) => btn.type !== 'reply' && btn.type !== 'pix');
 
     if (hasReplyButtons) {
@@ -3331,12 +3329,10 @@ export class BaileysStartupService extends ChannelStartupService {
       }
     }
 
+    // ── PIX button ──────────────────────────────────────────
     if (hasPixButton) {
       if (data.buttons.length > 1) {
         throw new BadRequestException('Only one PIX button is allowed');
-      }
-      if (hasOtherButtons) {
-        throw new BadRequestException('PIX button cannot be mixed with other button types');
       }
 
       const message: proto.IMessage = {
@@ -3361,13 +3357,73 @@ export class BaileysStartupService extends ChannelStartupService {
       });
     }
 
+    // ── Reply buttons (estratégia whaileys confirmada) ──────
+    if (hasReplyButtons) {
+      const generate = await (async () => {
+        if (data?.thumbnailUrl) {
+          return await this.prepareMediaMessage({ mediatype: 'image', media: data.thumbnailUrl });
+        }
+      })();
+
+      // ESTRATÉGIA 1: buttonsMessage (estrutura whaileys - confirmada funcionando)
+      const buttons = data.buttons.map((btn, index) => ({
+        buttonId: btn.id || `btn_${index}`,
+        buttonText: { displayText: btn.displayText },
+        type: 1,
+      }));
+
+      const baseMsg: any = {
+        text: '*' + data.title + '*' + (data?.description ? '\n\n' + data.description : ''),
+        footer: data?.footer || '',
+        buttons,
+        headerType: 1,
+      };
+
+      // Com imagem
+      if (generate?.message?.imageMessage) {
+        const imgMsg: any = {
+          image: generate.message.imageMessage,
+          caption: '*' + data.title + '*' + (data?.description ? '\n\n' + data.description : ''),
+          footer: data?.footer || '',
+          buttons,
+          headerType: 4,
+        };
+
+        try {
+          return await this.sendMessageWithTyping(data.number, imgMsg, {
+            delay: data?.delay,
+            presence: 'composing',
+            quoted: data?.quoted,
+            mentionsEveryOne: data?.mentionsEveryOne,
+            mentioned: data?.mentioned,
+          });
+        } catch (err) {
+          this.logger.warn('buttonMessage imgMsg failed, falling back to nativeFlow');
+        }
+      }
+
+      // Tentar buttonsMessage simples
+      try {
+        return await this.sendMessageWithTyping(data.number, baseMsg, {
+          delay: data?.delay,
+          presence: 'composing',
+          quoted: data?.quoted,
+          mentionsEveryOne: data?.mentionsEveryOne,
+          mentioned: data?.mentioned,
+        });
+      } catch (err) {
+        this.logger.warn('buttonMessage simple failed, falling back to nativeFlow');
+      }
+    }
+
+    // ── Fallback: nativeFlowMessage (URL, call, copy e outros) ─
     const generate = await (async () => {
       if (data?.thumbnailUrl) {
         return await this.prepareMediaMessage({ mediatype: 'image', media: data.thumbnailUrl });
       }
     })();
 
-    const buttons = data.buttons.map((value) => {
+    const nativeButtons = data.buttons.map((value) => {
       return { name: this.mapType.get(value.type), buttonParamsJson: this.toJSONString(value) };
     });
 
@@ -3396,7 +3452,7 @@ export class BaileysStartupService extends ChannelStartupService {
               }
             })(),
             nativeFlowMessage: {
-              buttons: buttons,
+              buttons: nativeButtons,
               messageParamsJson: JSON.stringify({ from: 'api', templateId: v4() }),
             },
           },
