@@ -3411,7 +3411,7 @@ export class BaileysStartupService extends ChannelStartupService {
           mentioned: data?.mentioned,
         });
       } catch (err) {
-        this.logger.warn('buttonMessage simple failed, falling back to nativeFlow');
+        this.logger.error('buttonMessage simple ERRO: ' + JSON.stringify(err));
       }
     }
 
